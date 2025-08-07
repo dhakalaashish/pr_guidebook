@@ -25,8 +25,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Create a .env file in the api/ folder with the following content:
-# FLASK_APP=api.py
-# FLASK_ENV=development
+# GITHUB_AUTH_TOKEN=xxxxx
+# GEMINI_API_KEY=xxxxxx
 
 flask run
 ```
@@ -41,7 +41,7 @@ cd ../client
 npm install
 
 # Create a .env file in the client/ folder with:
-# VITE_API_URL=http://localhost:5000
+# VITE_SERVER_URL=http://127.0.0.1:5000
 
 npm run dev
 ```
