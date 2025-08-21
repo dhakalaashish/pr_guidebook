@@ -25,8 +25,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Create a .env file in the api/ folder with the following content:
-# GITHUB_AUTH_TOKEN=xxxxx
-# GEMINI_API_KEY=xxxxxx
+FLASK_APP="api.py"
+GITHUB_AUTH_TOKEN="your_github_auth_token"
+GEMINI_API_KEY="your_gemini_api_key"
 
 flask run
 ```
