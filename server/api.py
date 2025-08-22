@@ -2,7 +2,7 @@ import os
 import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from utils.guidebook import classify_issue, verify_feature_uniqueness, check_issue_alignment_with_vision, check_issue_scope, understand_relevant_contribution_guidelines
+from utils.guidebook import classify_issue, verify_feature_uniqueness, check_issue_alignment_with_vision, check_issue_scope, understand_relevant_contribution_guidelines, generate_steps, explain_tests
 from utils.scraping import fetch_issue, clean_issue_info, get_diff, detect_duplicates
 from utils.io import read_issue_files
 
@@ -48,10 +48,10 @@ def getting_started():
     results["feature_uniqueness"] = feature_uniqueness
     align_with_project_vision = check_issue_alignment_with_vision(repo_description, title, body, contribution_guidelines, issue_type)
     results["align_with_project_vision"] = align_with_project_vision
-    issue_scope = check_issue_scope(repo_description, title, body, contribution_guidelines, issue_type)
-    results["issue_scope"] = issue_scope
     tune_contribution_guidelines = understand_relevant_contribution_guidelines(owner, repo, title, body, contribution_guidelines)
     results["tune_contribution_guidelines"] = tune_contribution_guidelines
+    issue_scope = check_issue_scope(repo_description, title, body, contribution_guidelines, issue_type, issue_number)
+    results["issue_scope"] = issue_scope
     print(results)
     return jsonify(results)
 
@@ -72,9 +72,8 @@ def implementation():
     
     # === Subtasks ===
     results = {}
-    results["steps"] = generate_steps(owner, repo, title, issue_number, suggestion_level, body, repo_description, contribution_guidelines)
-    results["tests"] = tests(owner, repo, title, issue_number, suggestion_level, body, repo_description, contribution_guidelines)
-    results["PR_creation"] = PR_creation(owner, repo, title, issue_number, suggestion_level, body, repo_description, contribution_guidelines)
+    results["steps"] = generate_steps(owner, repo, title, issue_number, body, repo_description, contribution_guidelines)
+    results["tests"] = explain_tests(owner, repo, title, issue_number, body, repo_description, contribution_guidelines)
 
     return jsonify(results)
 
@@ -126,3 +125,4 @@ def automate_PR_review():
 
 
 
+# This changes things a little. It is because, now what I want to do is this. Instead of asking the LLM to suggest how to solve the issue in the generate_steps step. I want to ask the user to choose which issue they want to solve in the check_issue_scope. Their choice should then be prepended to the /api/implementation_guide. 

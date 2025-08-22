@@ -37,7 +37,7 @@ def fetch_issue(issueUrl):
         print(f"Error fetching {issueApiUrl}: {e}")
         return None
     
-def gather_contribution_guidelines(owner, repo, chunk_size=4000):
+def gather_contribution_guidelines(owner, repo, repo_description, chunk_size=4000):
     """
     Fetch and aggregate contribution guidelines for a repository.
     Handles long docs via recursive binary merging of chunks.
@@ -95,7 +95,39 @@ def gather_contribution_guidelines(owner, repo, chunk_size=4000):
             f.write("No contribution guidelines found.")
         return "No contribution guidelines found."
 
-    structured_guidelines = ''.join(fetched_texts)
+    unstructured_guidelines = ''.join(fetched_texts)
+
+    # TODO: only keep the sentences that are important to the file
+    def process_chunk(text, repo_description):
+        prompt = f"""
+        You are an expert open-source contributor.
+
+        Task:
+        - Extract **ALL important and slightly relevant actionable information** from the following text.
+        - Reorganize into these sections for PR authors:
+            ## 1. Project Goals & Vision
+            ## 2. Setup Instructions
+            ## 3. Technical Design Alignment
+            ## 4. Code Style & Language Best Practices
+            ## 5. Performance Considerations
+            ## 6. Commit Quality Standards
+            ## 7. Pull Request Guidelines
+            ## 8. Testing (Automated & Manual)
+        - Do NOT omit any useful detail, even if minor.
+        - If a section is missing, leave it empty or infer best practices from the context.
+        - Keep all commands, paths, branch naming conventions, PR review rules, and testing details.
+        - Keep the tone directive and contributor-focused.
+        - No filler or maintainers-only info.
+
+        Repository Description:
+        {repo_description}
+
+        Text:
+        {text}
+        """
+        return call_llm(prompt)
+    
+    structured_guidelines = process_chunk(unstructured_guidelines, repo_description)
 
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(structured_guidelines)
@@ -138,8 +170,8 @@ def clean_issue_info(issue_data):
         print("Issue Number:", issue_number)
     else:
         print("Invalid GitHub API issue URL")
-
-    contribution_guidelines = gather_contribution_guidelines(repo_author_name, repo_name)
+    # TODO: Also extract the comments and the review comments for the repository
+    contribution_guidelines = gather_contribution_guidelines(repo_author_name, repo_name, repo_description)
 
     write_issue_files(repo_author_name, repo_name, issue_number, title, body, repo_description, contribution_guidelines)
 

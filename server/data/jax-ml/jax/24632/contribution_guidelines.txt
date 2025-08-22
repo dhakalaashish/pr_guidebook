@@ -1,6 +1,6 @@
 ## 1. Project Goals & Vision
 
-Contribute to JAX by answering questions, improving documentation, contributing to the codebase, or contributing to the broader JAX ecosystem.  The project adheres to Googleâ€™s Open Source Community Guidelines.  Contributions are highly valued.  Focus on issues marked with "contributions welcome" or "good first issue."  For other proposals, open a GitHub Issue or Discussion first.
+Contribute to JAX by answering questions, improving documentation, contributing to the codebase, or contributing to the broader JAX ecosystem.  The project adheres to Google’s Open Source Community Guidelines.  Contributions are highly valued.  Focus on issues marked with "contributions welcome" or "good first issue."  For other proposals, open a GitHub Issue or Discussion first.
 
 ## 2. Setup Instructions
 

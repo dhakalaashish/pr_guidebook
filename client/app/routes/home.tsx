@@ -18,6 +18,7 @@ export default function Home() {
   const [issueUrl, setIssueUrl] = useState("");
   const [prUrl, setPrUrl] = useState("");
   const [gettingStartedData, setGettingStartedData] = useState(null);
+  const [implementationData, setImplementationData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -48,8 +49,21 @@ export default function Home() {
         setError("Failed to generate getting started guide.");
         return;
       }
-
       setGettingStartedData(getting_started);
+      
+      // Step 3: Implementation guide (steps + tests)
+      const res3 = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/implementation_guide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...issueInfo, suggestion_level: 3 }), // default function-level detail
+      });
+      const implementation_guide = await res3.json();
+      if (!res3.ok) {
+        setError("Failed to generate implementation guide.");
+        return;
+      }
+      setImplementationData(implementation_guide);
+
       setError("");
     } catch (err) {
       setError("Failed to fetch checklist.");
@@ -91,6 +105,7 @@ export default function Home() {
         </CardContent>
       </Card>
 
+      {/* A. Getting Started */}
       {gettingStartedData && (
         <>
           <Card  className="mt-6">
@@ -101,16 +116,27 @@ export default function Home() {
               <ChecklistDisplay data={gettingStartedData} />
             </CardContent>
           </Card>
-          {/* <Card>
-            <CardContent className="space-y-4 pt-6">
-              <Input
-                placeholder="Paste PR branch URL to refresh checklist"
-                value={prUrl}
-                onChange={(e) => setPrUrl(e.target.value)}
-              />
-              <Button onClick={handleRefresh}>Refresh Checklist</Button>
+        </>
+      )}
+
+      {implementationData && (
+        <>
+          <Card  className="mt-6">
+            <CardHeader>
+              <CardTitle>B. Implementation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChecklistDisplay data={implementationData} />
+              <div className="mt-4 space-y-2">
+                <Input
+                  placeholder="Paste PR branch URL to refresh checklist"
+                  value={prUrl}
+                  onChange={(e) => setPrUrl(e.target.value)}
+                />
+                <Button onClick={handleRefresh}>Automated Review</Button>
+              </div>
             </CardContent>
-          </Card> */}
+          </Card>
         </>
       )}
 

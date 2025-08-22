@@ -1,0 +1,25 @@
+Do some reorganization of the docs with the goals of:
+- keeping a linear tutorial flow, visiting certain topics multiple times to build up understanding
+- deduplicating material
+- removing the “User guides” and “Advanced guides” sections and work the material into the tutorials
+
+Tasks are:
+
+- [ ] Merge How to Think in JAX with Key Concepts into a new intro section
+- [x] Split “Control flow” out of Sharp Bits into its own tutorial
+  - [x] Add an example for logical operators to the Control Flow tutorial 
+- [ ] Other changes to Sharp Bits
+    - [x] Remove or cut down parts on PRNG/NaNs since these are handled elsewhere
+    - [x] Move the discussion of jitting class methods from FAQ to Sharp Bits
+    - [ ] Add a note about not jitting functions that close over large arrays
+- [ ] New tutorial on Tracing (drawing from “How to Think in JAX” and “Different Kinds of JAX Values” in the FAQ)
+- [x] Add an example with register_dataclasses to the pytrees tutorial
+- [ ] Move “Controlling data and computation placement on devices” from FAQ to Intro to parallel programming
+- [ ] Split “Custom Pytrees” off of the pytrees tutorial and into its own Advanced section
+- [ ] Split up Advanced AD into sections
+- [ ] Reorganize the User Guides and Advanced Guides into “Getting Started > Tutorials” and “Resources and Advanced Tutorials”
+- [ ] Move “Buffer donation” from FAQ to a new section under “Performance optimizations”
+- [ ] Move “Benchmarking” from FAQ to a new section under “Performance benchmarking and profiling”
+- [ ] Remove material from “Parallel Computation” that overlaps with “Introduction to Parallel Programming”
+
+Complements #18585 

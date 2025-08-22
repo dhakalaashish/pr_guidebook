@@ -132,29 +132,30 @@ def check_issue_alignment_with_vision(repo_description, title, body, contributio
         except Exception:
             return {"status": "conflict", "details": llm_response.strip()}
 
-def check_issue_scope(repo_description, title, body, contribution_guidelines, issue_type):
+def check_issue_scope(repo_description, title, body, contribution_guidelines, issue_type, issue_number):
     """
     Check if the issue scope is manageable for a single PR.
-    If too large, suggest breaking into multiple smaller issues.
-    Only run for feature requests (not bugs).
+    If too large, suggest breaking it into multiple PRs for the same issue.
+    Adds reference to the issue in each PR description.
     """
 
-    # Step 1: Skip if bug
+    # Skip if bug
     if issue_type.strip().lower() == "bug":
         return {
-            "status": "not applicable",
-            "reason": "Issue is a bug report, so scope check is unnecessary."
+            "status": "single-pr",
+            "reason": "Bug fix issues are usually handled in a single PR."
         }
 
-    # Step 2: Build LLM prompt
+    # Build LLM prompt
     scope_prompt = f"""
-    You are an expert open-source project assistant.
+    You are an expert open-source maintainer.
 
     Task:
-    Determine whether the following feature request is manageable as a single PR,
-    or if its scope is too large and should be broken into smaller issues.
-    If it is too large, suggest 2-4 smaller chunks that can each become an issue. 
-    Provide actionable chunk titles suitable for new issues (like button labels).
+    Analyze the following feature request and decide:
+    - Can it be completed in a single PR?
+    - Or should it be split into multiple PRs (for easier review and contribution)?
+    
+    If splitting, provide a clear PR plan: suggest 2-4 smaller PRs with titles and brief descriptions.
 
     Inputs:
     - Project Description: {repo_description}
@@ -162,31 +163,57 @@ def check_issue_scope(repo_description, title, body, contribution_guidelines, is
     - Issue Title: {title}
     - Issue Description: {body}
 
-    Output Format (JSON):
-    If scope is manageable:
-    {{"status": "good", "suggested_chunks": []}}
-    If scope is too large:
-    {{"status": "too large", "suggested_chunks": ["chunk1", "chunk2", ...]}}
-        """
+    Output JSON:
+    If single PR:
+    {{
+      "status": "single-pr",
+      "pr_plan": []
+    }}
+    If multiple PRs:
+    {{
+      "status": "multi-pr",
+      "pr_plan": [
+        {{"title": "PR Title 1", "description": "Short explanation"}},
+        {{"title": "PR Title 2", "description": "Short explanation"}}
+      ]
+    }}
+    """
 
-    # Step 3: Call LLM
+    # Call LLM
     llm_response = call_llm(scope_prompt)
     if not llm_response:
         return {"error": "Failed to check issue scope."}
 
-    # Step 4: Parse JSON-like output
+    # Extract JSON
     try:
-        import json
-        # Extract JSON part if LLM returns extra text
-        import re
+        import json, re
         json_match = re.search(r"\{[\s\S]*\}", llm_response)
         if json_match:
-            return json.loads(json_match.group(0))
+            parsed = json.loads(json_match.group(0))
+
+            # Append issue reference in description
+            if "pr_plan" in parsed and parsed["pr_plan"]:
+                for pr in parsed["pr_plan"]:
+                    pr["description"] = f"{pr.get('description', '')} (Addresses Issue #{issue_number})"
+
+            return parsed
         else:
-            # Fallback: if no JSON, return raw text as a suggestion
-            return {"status": "too large", "suggested_chunks": [llm_response.strip()]}
+            return {
+                "status": "multi-pr",
+                "pr_plan": [{
+                    "title": "Manual Suggestion",
+                    "description": f"{llm_response.strip()} (Addresses Issue #{issue_number})"
+                }]
+            }
     except Exception:
-        return {"status": "too large", "suggested_chunks": [llm_response.strip()]}
+        return {
+            "status": "multi-pr",
+            "pr_plan": [{
+                "title": "Manual Suggestion",
+                "description": f"{llm_response.strip()} (Addresses Issue #{issue_number})"
+            }]
+        }
+
 
 def understand_relevant_contribution_guidelines(owner, repo, title, body, contribution_guidelines):
     """
@@ -240,6 +267,132 @@ def understand_relevant_contribution_guidelines(owner, repo, title, body, contri
             "local_setup_instructions": llm_response.strip(),
             "PR_creation_process": llm_response.strip()
         }
+
+def generate_steps(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, suggestion_level=3):
+    """
+    Generate step-by-step guidance for a contributor to resolve a GitHub issue.
+    
+    Parameters:
+    - owner: GitHub repo owner
+    - repo: GitHub repo name
+    - title: Issue title
+    - issue_number: Issue number
+    - suggestion_level: 1 (very high-level) to 5 (very detailed)
+    - body: Issue body text
+    - repo_description: Short description of the repo/project
+
+    Returns:
+    - List of steps as strings
+    """
+    # Map suggestion level to descriptive instructions
+    suggestion_detail_map = {
+        1: "High-level overview steps. Minimal technical details.",
+        2: "Module-level guidance. Which modules/files to touch.",
+        3: "Function-level guidance. Which functions to create or modify, with brief descriptions.",  # Default
+        4: "Line-level guidance. Rough code snippets or pseudo-code for each function.",
+        5: "Very detailed. Exact code recommendations or full function templates."
+    }
+
+    detail_description = suggestion_detail_map.get(suggestion_level, suggestion_detail_map[3])
+
+    # Compose prompt for LLM
+    prompt = f"""
+    You are an expert open-source contributor assistant.
+
+    The contributor wants to resolve the following GitHub issue:
+    Repository: {owner}/{repo}
+    Issue #{issue_number}: {title}
+    Issue Body: {body}
+
+    Repository description: {repo_description}
+
+    Contribution guidelines (extracted from CONTRIBUTING.md or docs):
+    {contribution_guidelines}
+
+    Suggest step-by-step instructions for the contributor to solve the issue.
+    Focus on technical steps including files to create, functions to implement, and their responsibilities.
+    Follow these rules:
+    - Use {detail_description}
+    - Number the steps clearly.
+    - Keep it actionable and practical for someone who wants to submit a PR.
+
+    Output the steps as a JSON array of strings.
+    """
+
+    # Call the LLM (replace with your actual call_llm function)
+    steps_text = call_llm(prompt)
+
+    try:
+        import json
+        steps = json.loads(steps_text)
+    except Exception:
+        # fallback if LLM output isn't proper JSON
+        steps = [line.strip() for line in steps_text.split("\n") if line.strip()]
+
+    return steps
+
+def explain_tests(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, suggestion_level=3):
+    """
+    Generate step-by-step guidance for writing and running tests for a given GitHub issue.
+
+    Parameters:
+    - owner: GitHub repo owner
+    - repo: GitHub repo name
+    - title: Issue title
+    - issue_number: Issue number
+    - suggestion_level: 1 (high-level) to 5 (very detailed)
+    - body: Issue body text
+    - repo_description: Short description of the repo/project
+    - contribution_guidelines: Contribution guidelines text, to extract testing instructions
+
+    Returns:
+    - List of testing steps as strings
+    """
+    suggestion_detail_map = {
+        1: "High-level testing instructions, minimal technical details",
+        2: "Module-level guidance on which modules/files to test",
+        3: "Function-level guidance, which functions/methods to test, and what scenarios to cover",  # Default
+        4: "Line-level guidance or pseudo-code for writing test cases",
+        5: "Very detailed instructions including exact test commands and example code snippets"
+    }
+
+    detail_description = suggestion_detail_map.get(suggestion_level, suggestion_detail_map[3])
+
+    prompt = f"""
+    You are an expert open-source contributor assistant.
+
+    The contributor wants to resolve the following GitHub issue:
+    Repository: {owner}/{repo}
+    Issue #{issue_number}: {title}
+    Issue Body: {body}
+
+    Repository description: {repo_description}
+
+    Contribution guidelines (extracted from CONTRIBUTING.md or docs):
+    {contribution_guidelines}
+
+    Before creating a pull request, the contributor must ensure proper testing.
+
+    Suggest step-by-step instructions to conduct the necessary tests:
+    - Focus on testing functions or modules affected by this issue.
+    - Mention running existing tests and adding new ones.
+    - Emphasize the importance of testing before creating a PR.
+    - Use {detail_description}
+    - Output the steps as a JSON array of strings, numbered clearly.
+    """
+
+    # Call the LLM (replace with your actual call_llm function)
+    steps_text = call_llm(prompt)
+
+    try:
+        import json
+        steps = json.loads(steps_text)
+    except Exception:
+        # fallback if LLM output isn't proper JSON
+        steps = [line.strip() for line in steps_text.split("\n") if line.strip()]
+
+    return steps
+
 
 # Bulk call several prompts to generate different checklist for each guidebook heading
 def call_llm(prompt):
