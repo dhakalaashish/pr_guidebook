@@ -21,8 +21,10 @@ export default function Home() {
   const [implementationData, setImplementationData] = useState<any>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [issueInfo, setIssueInfo] = useState<any>(null);
 
   const isUrl = (s?: string) => !!s && /^https?:\/\//i.test(s);
+
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -49,23 +51,41 @@ export default function Home() {
         setError("Failed to generate getting started guide.");
         return;
       }
-      setGettingStartedData(getting_started);
 
-      const res3 = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/implementation_guide`, {
+      setGettingStartedData(getting_started);
+      setIssueInfo(issueInfo); // Store issue info for later use (needed for implementation guide)
+      setError("");
+    } catch {
+      setError("Failed to generate guidebook.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImplementation = async (pr_title: string, pr_description: string) => {
+    if (!issueInfo) {
+      setError("Please generate the guidebook first.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/implementation_guide`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...issueInfo, suggestion_level: 3 }), // default: function-level detail
+        body: JSON.stringify({ ...issueInfo, pr_title, pr_description, suggestion_level: 3 }), // default: function-level detail
       });
-      const implementation_guide = await res3.json();
-      if (!res3.ok) {
+
+      const implementation_guide = await res.json();
+      if (!res.ok) {
         setError("Failed to generate implementation guide.");
         return;
       }
-      setImplementationData(implementation_guide);
 
+      setImplementationData(implementation_guide);
       setError("");
     } catch {
-      setError("Failed to fetch checklist.");
+      setError("Error generating implementation guide.");
     } finally {
       setLoading(false);
     }
@@ -253,24 +273,46 @@ export default function Home() {
                     <ul className="space-y-2">
                       {gettingStartedData.issue_scope.pr_plan.map(
                         (pr: { title: string; description?: string }, i: number) => (
-                          <li key={i} className="border rounded p-3">
+                          <li key={i} className="border rounded p-3 flex flex-col gap-2">
                             <div className="font-medium">{pr.title}</div>
                             {pr.description && (
                               <div className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
                                 {pr.description}
                               </div>
                             )}
+                            <Button
+                              onClick={() =>
+                                handleImplementation(pr.title, pr.description || "")
+                              }
+                              className="bg-blue-600 text-white rounded px-3 py-1 text-sm hover:bg-blue-700"
+                            >
+                              Use This PR Plan
+                            </Button>
                           </li>
                         )
                       )}
                     </ul>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      This appears manageable as a single PR.
-                    </p>
+                    <div className="flex flex-col gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        This appears manageable as a single PR.
+                      </p>
+                      <Button
+                        onClick={() =>
+                          handleImplementation(
+                            "", 
+                            ""
+                          )
+                        }
+                        className="bg-blue-600 text-white rounded px-3 py-1 text-sm hover:bg-blue-700"
+                      >
+                        Use This Plan
+                      </Button>
+                    </div>
                   )}
                 </AccordionContent>
               </AccordionItem>
+
             </Accordion>
           </CardContent>
         </Card>

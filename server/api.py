@@ -61,19 +61,32 @@ def implementation():
     owner = issue_info['repo_author']
     repo = issue_info['repo_name']
     issue_number = issue_info['issue_number']
-    suggestion_level = issue_info['suggestion_level']
+    suggestion_level = issue_info.get('suggestion_level', 3)
+    pr_title = issue_info.get('prTitle', '')
+    pr_description = issue_info.get('prDescription', '')
+
+    # Save PR choice to pr_choice.txt
+    pr_choice_path = f"data/{owner}/{repo}/{issue_number}/pr_choice.txt"
+    os.makedirs(os.path.dirname(pr_choice_path), exist_ok=True)
+    with open(pr_choice_path, 'w', encoding='utf-8') as f:
+        f.write(f"PR Title: {pr_title}\nPR Description: {pr_description}")
 
     issue_files = read_issue_files(owner, repo, issue_number)
-
     title = issue_files["title"]
     body = issue_files["body"]
     repo_description = issue_files["repo_description"]
     contribution_guidelines = issue_files["contribution_guidelines"]
-    
+
     # === Subtasks ===
     results = {}
-    results["steps"] = generate_steps(owner, repo, title, issue_number, body, repo_description, contribution_guidelines)
-    results["tests"] = explain_tests(owner, repo, title, issue_number, body, repo_description, contribution_guidelines)
+    results["steps"] = generate_steps(
+        owner, repo, title, issue_number, body, repo_description, contribution_guidelines,
+        pr_title, pr_description, suggestion_level
+    )
+    results["tests"] = explain_tests(
+        owner, repo, title, issue_number, body, repo_description, contribution_guidelines,
+        pr_title, pr_description, suggestion_level
+    )
 
     return jsonify(results)
 

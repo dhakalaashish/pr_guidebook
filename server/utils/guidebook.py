@@ -268,131 +268,92 @@ def understand_relevant_contribution_guidelines(owner, repo, title, body, contri
             "PR_creation_process": llm_response.strip()
         }
 
-def generate_steps(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, suggestion_level=3):
-    """
-    Generate step-by-step guidance for a contributor to resolve a GitHub issue.
-    
-    Parameters:
-    - owner: GitHub repo owner
-    - repo: GitHub repo name
-    - title: Issue title
-    - issue_number: Issue number
-    - suggestion_level: 1 (very high-level) to 5 (very detailed)
-    - body: Issue body text
-    - repo_description: Short description of the repo/project
+def generate_steps(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, pr_title=None, pr_description=None, suggestion_level=3):
+    detail_map = {1: "High-level overview steps", 2: "Module-level guidance", 3: "Function-level guidance",
+                  4: "Line-level guidance", 5: "Very detailed with pseudo-code"}
+    detail_description = detail_map.get(suggestion_level, detail_map[3])
 
-    Returns:
-    - List of steps as strings
-    """
-    # Map suggestion level to descriptive instructions
-    suggestion_detail_map = {
-        1: "High-level overview steps. Minimal technical details.",
-        2: "Module-level guidance. Which modules/files to touch.",
-        3: "Function-level guidance. Which functions to create or modify, with brief descriptions.",  # Default
-        4: "Line-level guidance. Rough code snippets or pseudo-code for each function.",
-        5: "Very detailed. Exact code recommendations or full function templates."
-    }
+    # Only include PR info if pr_title is provided
+    pr_info = ""
+    if pr_title and pr_description:
+        pr_info = f"""
+        The contributor has chosen this PR plan:
+        Title: {pr_title}
+        Description: {pr_description}
+        """
 
-    detail_description = suggestion_detail_map.get(suggestion_level, suggestion_detail_map[3])
-
-    # Compose prompt for LLM
     prompt = f"""
     You are an expert open-source contributor assistant.
 
-    The contributor wants to resolve the following GitHub issue:
     Repository: {owner}/{repo}
     Issue #{issue_number}: {title}
     Issue Body: {body}
 
     Repository description: {repo_description}
 
-    Contribution guidelines (extracted from CONTRIBUTING.md or docs):
+    Contribution guidelines:
     {contribution_guidelines}
 
-    Suggest step-by-step instructions for the contributor to solve the issue.
-    Focus on technical steps including files to create, functions to implement, and their responsibilities.
-    Follow these rules:
-    - Use {detail_description}
-    - Number the steps clearly.
-    - Keep it actionable and practical for someone who wants to submit a PR.
+    {pr_info}
 
-    Output the steps as a JSON array of strings.
+    Suggest step-by-step instructions for implementing this PR.
+    Focus on:
+    - Files to create or modify
+    - Functions to implement, and their responsibilities
+    - Use {detail_description}
+
+    Output as JSON array of steps.
     """
 
-    # Call the LLM (replace with your actual call_llm function)
     steps_text = call_llm(prompt)
-
     try:
         import json
-        steps = json.loads(steps_text)
-    except Exception:
-        # fallback if LLM output isn't proper JSON
-        steps = [line.strip() for line in steps_text.split("\n") if line.strip()]
+        return json.loads(steps_text)
+    except:
+        return [line.strip() for line in steps_text.split("\n") if line.strip()]
 
-    return steps
+def explain_tests(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, pr_title=None, pr_description=None, suggestion_level=3):
+    detail_map = {1: "High-level testing instructions", 2: "Module-level guidance", 3: "Function-level guidance",
+                  4: "Line-level pseudo-code", 5: "Very detailed with commands and examples"}
+    detail_description = detail_map.get(suggestion_level, detail_map[3])
 
-def explain_tests(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, suggestion_level=3):
-    """
-    Generate step-by-step guidance for writing and running tests for a given GitHub issue.
-
-    Parameters:
-    - owner: GitHub repo owner
-    - repo: GitHub repo name
-    - title: Issue title
-    - issue_number: Issue number
-    - suggestion_level: 1 (high-level) to 5 (very detailed)
-    - body: Issue body text
-    - repo_description: Short description of the repo/project
-    - contribution_guidelines: Contribution guidelines text, to extract testing instructions
-
-    Returns:
-    - List of testing steps as strings
-    """
-    suggestion_detail_map = {
-        1: "High-level testing instructions, minimal technical details",
-        2: "Module-level guidance on which modules/files to test",
-        3: "Function-level guidance, which functions/methods to test, and what scenarios to cover",  # Default
-        4: "Line-level guidance or pseudo-code for writing test cases",
-        5: "Very detailed instructions including exact test commands and example code snippets"
-    }
-
-    detail_description = suggestion_detail_map.get(suggestion_level, suggestion_detail_map[3])
+    pr_info = ""
+    if pr_title and pr_description:
+        pr_info = f"""
+        The contributor is implementing this PR:
+        Title: {pr_title}
+        Description: {pr_description}
+        """
 
     prompt = f"""
     You are an expert open-source contributor assistant.
 
-    The contributor wants to resolve the following GitHub issue:
     Repository: {owner}/{repo}
     Issue #{issue_number}: {title}
     Issue Body: {body}
 
     Repository description: {repo_description}
 
-    Contribution guidelines (extracted from CONTRIBUTING.md or docs):
+    Contribution guidelines:
     {contribution_guidelines}
 
-    Before creating a pull request, the contributor must ensure proper testing.
+    {pr_info}
 
-    Suggest step-by-step instructions to conduct the necessary tests:
-    - Focus on testing functions or modules affected by this issue.
-    - Mention running existing tests and adding new ones.
-    - Emphasize the importance of testing before creating a PR.
+    Provide detailed instructions for:
+    - Running existing tests
+    - Writing new tests for added functionality
     - Use {detail_description}
-    - Output the steps as a JSON array of strings, numbered clearly.
+    - Emphasize testing before creating a PR
+
+    Output as JSON array of steps.
     """
 
-    # Call the LLM (replace with your actual call_llm function)
     steps_text = call_llm(prompt)
-
     try:
         import json
-        steps = json.loads(steps_text)
-    except Exception:
-        # fallback if LLM output isn't proper JSON
-        steps = [line.strip() for line in steps_text.split("\n") if line.strip()]
-
-    return steps
-
+        return json.loads(steps_text)
+    except:
+        return [line.strip() for line in steps_text.split("\n") if line.strip()]
 
 # Bulk call several prompts to generate different checklist for each guidebook heading
 def call_llm(prompt):
