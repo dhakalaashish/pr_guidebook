@@ -17,7 +17,7 @@ export function meta({}: Route.MetaArgs) {
 export default function Home() {
   const [issueUrl, setIssueUrl] = useState("");
   const [prUrl, setPrUrl] = useState("");
-  const [data, setData] = useState(null);
+  const [gettingStartedData, setGettingStartedData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -42,14 +42,14 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(issueInfo),
       });
-      const guidebook = await res2.json();
+      const getting_started = await res2.json();
 
       if (!res2.ok) {
         setError("Failed to generate getting started guide.");
         return;
       }
 
-      setData(guidebook);
+      setGettingStartedData(getting_started);
       setError("");
     } catch (err) {
       setError("Failed to fetch checklist.");
@@ -91,10 +91,17 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      {data && (
+      {gettingStartedData && (
         <>
-          <ChecklistDisplay data={data} />
-          <Card>
+          <Card  className="mt-6">
+            <CardHeader>
+              <CardTitle>A. Getting Started</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChecklistDisplay data={gettingStartedData} />
+            </CardContent>
+          </Card>
+          {/* <Card>
             <CardContent className="space-y-4 pt-6">
               <Input
                 placeholder="Paste PR branch URL to refresh checklist"
@@ -103,7 +110,7 @@ export default function Home() {
               />
               <Button onClick={handleRefresh}>Refresh Checklist</Button>
             </CardContent>
-          </Card>
+          </Card> */}
         </>
       )}
 
