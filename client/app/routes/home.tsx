@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "~/components/ui/accordion";
+import ReactMarkdown from "react-markdown"
 import { useState } from "react";
 import ErrorMessage from "~/components/ErrorMessage";
 
@@ -215,9 +216,12 @@ export default function Home() {
                   {/* Local Setup */}
                   <div className="space-y-1">
                     <h4 className="font-medium">Local Setup Instructions</h4>
+                    
                     <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
                       {gettingStartedData?.tune_contribution_guidelines?.local_setup_instructions ||
                         "No setup instructions found."}
+                      </ReactMarkdown>
                     </pre>
                   </div>
 
@@ -225,8 +229,10 @@ export default function Home() {
                   <div className="space-y-1">
                     <h4 className="font-medium">PR Creation Process</h4>
                     <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
                       {gettingStartedData?.tune_contribution_guidelines?.PR_creation_process ||
                         "No PR creation process found."}
+                      </ReactMarkdown>
                     </pre>
                   </div>
                 </AccordionContent>
