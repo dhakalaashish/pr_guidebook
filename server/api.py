@@ -2,7 +2,7 @@ import os
 import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from utils.guidebook import classify_issue, verify_feature_uniqueness, check_issue_alignment_with_vision, check_issue_scope, understand_relevant_contribution_guidelines, generate_steps, explain_tests
+from utils.guidebook import classify_issue, verify_feature_uniqueness, check_issue_alignment_with_vision, check_issue_scope, understand_relevant_contribution_guidelines, generate_steps, explain_tests, validate_pr_resolution, enforce_contribution_guidelines, clear_pr_description, tests_presence
 from utils.scraping import fetch_issue, clean_issue_info, get_diff, detect_duplicates
 from utils.io import read_issue_files
 
@@ -87,7 +87,7 @@ def implementation():
         owner, repo, title, issue_number, body, repo_description, contribution_guidelines,
         pr_title, pr_description, suggestion_level
     )
-
+    print(results)
     return jsonify(results)
 
 @app.route('/api/automate_PR_review', methods=['POST'])
@@ -122,8 +122,8 @@ def automate_PR_review():
 
     # === Subtasks ===
     results = {}
-    results["validate_issue_resolution"] = validate_issue_resolution(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, diff)
-    results["enforce_contribution_guidelines"] = enforce_contribution_guidelines(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, diff)
+    results["validate_pr_resolution"] = validate_pr_resolution(owner, repo, issue_number, repo_description, diff)
+    results["enforce_contribution_guidelines"] = enforce_contribution_guidelines(owner, repo, issue_number, contribution_guidelines, diff)
     # All of the following enforcement of contribution guidelines must happen in a single conversation state
         # technical_design_alignment
         # match_project_code_style
@@ -131,8 +131,8 @@ def automate_PR_review():
         # possible_performance_issues
         # high_source_code_quality
         # commit_quality_standards
-    results["clear_pr_description"] = clear_pr_description(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, diff)
-    results["tests_presence"] = tests_presence(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, diff)
+    results["clear_pr_description"] = clear_pr_description(owner, repo, issue_number, contribution_guidelines, diff)
+    results["tests_presence"] = tests_presence(owner, repo, issue_number, contribution_guidelines, diff)
 
     return jsonify(results)
 

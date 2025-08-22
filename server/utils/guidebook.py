@@ -302,19 +302,38 @@ def generate_steps(owner, repo, title, issue_number, body, repo_description, con
     - Functions to implement, and their responsibilities
     - Use {detail_description}
 
-    Output as JSON array of steps.
+    ### Output format
+    Return **only valid JSON**, no Markdown, no commentary. 
+    Example:
+    [
+      "Update README with setup instructions",
+      "Modify src/utils.py to add parse_data()",
+      "Write unit tests in tests/test_utils.py"
+    ]
     """
 
-    steps_text = call_llm(prompt)
+    steps_text = call_llm(prompt).strip()
+
     try:
         import json
-        return json.loads(steps_text)
+        parsed = json.loads(steps_text)
+        # Always normalize to list of strings
+        return [str(s).strip() for s in parsed if str(s).strip()]
     except:
-        return [line.strip() for line in steps_text.split("\n") if line.strip()]
+        # fallback: split lines
+        return [line.strip("-* ") for line in steps_text.split("\n") if line.strip()]
 
-def explain_tests(owner, repo, title, issue_number, body, repo_description, contribution_guidelines, pr_title=None, pr_description=None, suggestion_level=3):
-    detail_map = {1: "High-level testing instructions", 2: "Module-level guidance", 3: "Function-level guidance",
-                  4: "Line-level pseudo-code", 5: "Very detailed with commands and examples"}
+def explain_tests(owner, repo, title, issue_number, body, repo_description,
+                  contribution_guidelines, pr_title=None, pr_description=None,
+                  suggestion_level=3):
+
+    detail_map = {
+        1: "High-level testing instructions",
+        2: "Module-level guidance",
+        3: "Function-level guidance",
+        4: "Line-level pseudo-code",
+        5: "Very detailed with commands and examples"
+    }
     detail_description = detail_map.get(suggestion_level, detail_map[3])
 
     pr_info = ""
@@ -345,15 +364,265 @@ def explain_tests(owner, repo, title, issue_number, body, repo_description, cont
     - Use {detail_description}
     - Emphasize testing before creating a PR
 
-    Output as JSON array of steps.
+    Output STRICTLY as a valid JSON array of steps.
     """
 
     steps_text = call_llm(prompt)
+
+    # --- Try parsing JSON safely ---
     try:
-        import json
         return json.loads(steps_text)
     except:
-        return [line.strip() for line in steps_text.split("\n") if line.strip()]
+        # Try to extract JSON block from text
+        match = re.search(r"(\[.*\])", steps_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except:
+                pass
+        # Fallback: plain list
+        return [line.strip("-• ") for line in steps_text.split("\n") if line.strip()]
+
+def validate_pr_resolution(owner, repo, issue_number, repo_description, diff):
+    """
+    Validates if the selected PR is fully implemented according to the user's choice.
+    Returns a markdown list of items still missing if any.
+    """
+    pr_choice_file = os.path.join("data", owner, repo, str(issue_number), "pr_choice.txt")
+    if not os.path.exists(pr_choice_file):
+        return "PR choice not found. User must select a PR plan first."
+
+    # Read the PR choice (plain text)
+    with open(pr_choice_file, "r", encoding="utf-8") as f:
+        pr_choice_text = f.read().strip()
+
+    # Compose prompt for LLM
+    prompt = f"""
+    You are reviewing a pull request.
+
+    PR plan chosen by the user:
+    {pr_choice_text}
+
+    Repository description:
+    {repo_description}
+
+    Diff of the PR:
+    {diff}
+
+    Task: Check if the PR fully implements the chosen PR plan.
+    If some parts of the PR plan are not implemented, create a markdown list of what is still missing.
+    Focus only on the PR plan itself. Do not consider the original issue description.
+    """
+
+    # Call your LLM function here
+    result = call_llm(prompt)
+    return result
+
+def enforce_contribution_guidelines(owner, repo, issue_number, contribution_guidelines, diff):
+    """
+    Evaluates if the PR follows the repository's contribution guidelines:
+    - technical_design_alignment
+    - match_project_code_style
+    - language_specific_best_practices
+    - possible_performance_issues
+    - high_source_code_quality
+    - commit_quality_standards
+
+    Returns a structured JSON object with suggestions.
+    """
+    import os, json, re
+
+    # Read PR choice
+    pr_choice_file = os.path.join("data", owner, repo, str(issue_number), "pr_choice.txt")
+    if not os.path.exists(pr_choice_file):
+        return {"error": "PR choice not found. User must select a PR plan first."}
+
+    with open(pr_choice_file, "r", encoding="utf-8") as f:
+        pr_choice_text = f.read().strip()
+
+    # Compose prompt for LLM
+    prompt = f"""
+    You are an expert open-source assistant.
+
+    Task:
+    Evaluate a pull request against the repository's contribution guidelines. Assess all of the following aspects in one review:
+    1. Technical design alignment with the project's expectations.
+    2. Match to the project's code style.
+    3. Adherence to language-specific best practices.
+    4. Possible performance issues in the code.
+    5. Overall source code quality.
+    6. Commit quality standards (if any).
+
+    Inputs:
+    - Repository: {owner}/{repo}
+    - Contribution Guidelines: {contribution_guidelines}
+    - PR plan chosen by the user:
+    {pr_choice_text}
+    - Diff of the PR:
+    {diff}
+
+    Output Format (JSON):
+    {{
+        "technical_design_alignment": "...",  # Suggestions or observations
+        "match_project_code_style": "...",  # Issues or confirmation
+        "language_specific_best_practices": "...",
+        "possible_performance_issues": "...",
+        "high_source_code_quality": "...",
+        "commit_quality_standards": "..."
+    }}
+    Respond **only** with JSON, no extra text.
+    """
+
+    # Call your LLM function
+    llm_response = call_llm(prompt)
+    if not llm_response:
+        return {"error": "Failed to fetch contribution guidelines enforcement."}
+
+    # Parse JSON from LLM response
+    try:
+        json_match = re.search(r"\{[\s\S]*\}", llm_response)
+        if json_match:
+            return json.loads(json_match.group(0))
+        else:
+            # fallback: return all fields with raw text
+            return {
+                "technical_design_alignment": llm_response.strip(),
+                "match_project_code_style": llm_response.strip(),
+                "language_specific_best_practices": llm_response.strip(),
+                "possible_performance_issues": llm_response.strip(),
+                "high_source_code_quality": llm_response.strip(),
+                "commit_quality_standards": llm_response.strip()
+            }
+    except Exception:
+        return {
+            "technical_design_alignment": llm_response.strip(),
+            "match_project_code_style": llm_response.strip(),
+            "language_specific_best_practices": llm_response.strip(),
+            "possible_performance_issues": llm_response.strip(),
+            "high_source_code_quality": llm_response.strip(),
+            "commit_quality_standards": llm_response.strip()
+        }
+
+def clear_pr_description(owner, repo, issue_number, contribution_guidelines, diff):
+    """
+    Checks the PR description and generates a markdown with suggestions
+    for making it clear, concise, linked to the issue, and consistent
+    with contribution guidelines.
+    
+    Returns a markdown string.
+    """
+    import os
+
+    # Read PR choice
+    pr_choice_file = os.path.join("data", owner, repo, str(issue_number), "pr_choice.txt")
+    if not os.path.exists(pr_choice_file):
+        return "PR choice not found. User must select a PR plan first."
+
+    with open(pr_choice_file, "r", encoding="utf-8") as f:
+        pr_choice_text = f.read().strip()
+
+    # Extract the PR description from the text
+    pr_description = ""
+    lines = pr_choice_text.split("\n")
+    for line in lines:
+        if line.lower().startswith("pr description:"):
+            pr_description = line[len("pr description:"):].strip()
+
+    prompt = f"""
+    You are an expert open-source assistant.
+
+    Task:
+    Review the following PR description and the associated code diff.
+    Provide feedback in markdown format on how to make it clear, concise, informative,
+    and aligned with the repository's contribution guidelines regarding PR descriptions.
+
+    Your response should include:
+    1. Current PR description.
+    2. Suggestions to improve clarity, brevity, and informativeness.
+    3. Recommendations from the contribution guidelines (if they mention PR description format).
+    4. An example improved PR description that the user can copy-paste.
+    5. Ensure the PR links to the issue it fixes (use a placeholder #ISSUE_NUMBER if needed).
+
+    Inputs:
+    - Repository: {owner}/{repo}
+    - Contribution Guidelines: {contribution_guidelines}
+    - Current PR Description: {pr_description}
+    - Diff of the PR:
+    {diff}
+
+    Respond ONLY in markdown format. Do not include JSON or any extra text.
+    """
+
+    # Call LLM
+    llm_response = call_llm(prompt)
+
+    return llm_response
+
+def tests_presence(owner, repo, issue_number, contribution_guidelines, diff):
+    """
+    Checks whether tests are present in the PR, if the contribution guidelines
+    recommend tests, and if the PR itself suggests testing is required.
+    Generates a markdown with:
+      - Status of automated tests
+      - Recommendations for additional tests
+      - Instructions for manual testing if needed
+    """
+    import os
+
+    # Read PR choice
+    pr_choice_file = os.path.join("data", owner, repo, str(issue_number), "pr_choice.txt")
+    if not os.path.exists(pr_choice_file):
+        return "PR choice not found. User must select a PR plan first."
+
+    with open(pr_choice_file, "r", encoding="utf-8") as f:
+        pr_choice_text = f.read().strip()
+
+    # Extract the PR title and description from the text
+    pr_title = ""
+    pr_description = ""
+    lines = pr_choice_text.split("\n")
+    for line in lines:
+        if line.lower().startswith("pr title:"):
+            pr_title = line[len("pr title:"):].strip()
+        elif line.lower().startswith("pr description:"):
+            pr_description = line[len("pr description:"):].strip()
+
+    prompt = f"""
+    You are an expert open-source assistant.
+
+    Task:
+    Review the following pull request diff, the PR title, and PR description.
+    Check whether:
+    1. The PR includes automated tests.
+    2. Contribution guidelines mention testing requirements.
+    3. The PR title or description implies that testing is required.
+
+    Then:
+    - Suggest any additional automated tests that should be added.
+    - Provide instructions for manual testing if necessary.
+    - Provide your response in markdown format.
+
+    Inputs:
+    - Repository: {owner}/{repo}
+    - Contribution Guidelines: {contribution_guidelines}
+    - PR Title: {pr_title}
+    - PR Description: {pr_description}
+    - Diff of the PR:
+    {diff}
+
+    Output format:
+    - Status of automated tests: ...
+    - Required tests from contribution guidelines: ...
+    - Additional automated tests: ...
+    - Manual testing instructions: ...
+
+    Respond ONLY in markdown format.
+    """
+
+    # Call the LLM
+    llm_response = call_llm(prompt)
+    return llm_response
+
 
 # Bulk call several prompts to generate different checklist for each guidebook heading
 def call_llm(prompt):

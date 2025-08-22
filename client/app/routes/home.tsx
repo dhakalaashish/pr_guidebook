@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown"
 import { useState } from "react";
 import ErrorMessage from "~/components/ErrorMessage";
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ }: Route.MetaArgs) {
   return [
     { title: "New React Router App" },
     { name: "description", content: "Welcome to React Router!" },
@@ -19,6 +19,7 @@ export default function Home() {
   const [prUrl, setPrUrl] = useState("");
   const [gettingStartedData, setGettingStartedData] = useState<any>(null);
   const [implementationData, setImplementationData] = useState<any>(null);
+  const [automatedReviewData, setAutomatedReviewData] = useState<any>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [issueInfo, setIssueInfo] = useState<any>(null);
@@ -91,20 +92,42 @@ export default function Home() {
     }
   };
 
-  const handleRefresh = async () => {
+  const handleAutomateReview = async (prUrl: string) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/refresh`, {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/automate_PR_review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prUrl }),
+        body: JSON.stringify({ ...issueInfo, pr_url: prUrl, suggestion_level: 3 }), // default: function-level detail
       });
       const json = await res.json();
-      setImplementationData(json);
+      setAutomatedReviewData(json);
       setError("");
     } catch {
       setError("Failed to refresh checklist.");
     }
   };
+
+  // utils/parseImplementation.ts
+  function parseImplementation(raw: string) {
+    if (!raw) return [];
+
+    // Remove ```json or ``` at start and ``` at end
+    const cleaned = raw
+      .replace(/^```json\s*/, "")
+      .replace(/```$/, "")
+      .trim();
+
+    try {
+      // Parse JSON
+      const parsed = JSON.parse(JSON.stringify(JSON.parse(cleaned)));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error("Failed to parse implementation steps:", e);
+      return [];
+    }
+  }
+
+
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -167,8 +190,10 @@ export default function Home() {
                     </span>
                   </div>
                   {gettingStartedData?.feature_uniqueness?.guidance && (
-                    <p className="text-sm whitespace-pre-wrap">
+                    <p className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
                       {gettingStartedData.feature_uniqueness.guidance}
+                      </ReactMarkdown>
                     </p>
                   )}
                 </AccordionContent>
@@ -236,11 +261,11 @@ export default function Home() {
                   {/* Local Setup */}
                   <div className="space-y-1">
                     <h4 className="font-medium">Local Setup Instructions</h4>
-                    
+
                     <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
                       <ReactMarkdown>
-                      {gettingStartedData?.tune_contribution_guidelines?.local_setup_instructions ||
-                        "No setup instructions found."}
+                        {gettingStartedData?.tune_contribution_guidelines?.local_setup_instructions ||
+                          "No setup instructions found."}
                       </ReactMarkdown>
                     </pre>
                   </div>
@@ -250,8 +275,8 @@ export default function Home() {
                     <h4 className="font-medium">PR Creation Process</h4>
                     <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
                       <ReactMarkdown>
-                      {gettingStartedData?.tune_contribution_guidelines?.PR_creation_process ||
-                        "No PR creation process found."}
+                        {gettingStartedData?.tune_contribution_guidelines?.PR_creation_process ||
+                          "No PR creation process found."}
                       </ReactMarkdown>
                     </pre>
                   </div>
@@ -269,7 +294,7 @@ export default function Home() {
                   </div>
 
                   {Array.isArray(gettingStartedData?.issue_scope?.pr_plan) &&
-                  gettingStartedData.issue_scope.pr_plan.length > 0 ? (
+                    gettingStartedData.issue_scope.pr_plan.length > 0 ? (
                     <ul className="space-y-2">
                       {gettingStartedData.issue_scope.pr_plan.map(
                         (pr: { title: string; description?: string }, i: number) => (
@@ -286,7 +311,7 @@ export default function Home() {
                               }
                               className="bg-blue-600 text-white rounded px-3 py-1 text-sm hover:bg-blue-700"
                             >
-                              Use This PR Plan
+                              Create Pull Request
                             </Button>
                           </li>
                         )
@@ -300,13 +325,13 @@ export default function Home() {
                       <Button
                         onClick={() =>
                           handleImplementation(
-                            "", 
+                            "",
                             ""
                           )
                         }
                         className="bg-blue-600 text-white rounded px-3 py-1 text-sm hover:bg-blue-700"
                       >
-                        Use This Plan
+                        Create Pull Request
                       </Button>
                     </div>
                   )}
@@ -324,49 +349,134 @@ export default function Home() {
           <CardHeader>
             <CardTitle>B. Implementation</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Accordion type="multiple" className="w-full mt-4">
               {/* Steps */}
-              <AccordionItem value="impl-steps">
+              <AccordionItem value="gs-steps">
                 <AccordionTrigger>Steps to Implement</AccordionTrigger>
-                <AccordionContent>
-                  {Array.isArray(implementationData.steps) && implementationData.steps.length > 0 ? (
-                    <ol className="list-decimal ml-5 space-y-1">
-                      {implementationData.steps.map((s: string, i: number) => (
-                        <li key={i} className="whitespace-pre-wrap">{s}</li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No steps generated.</p>
-                  )}
+                <AccordionContent className="space-y-2">
+                  <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                    {implementationData.steps && implementationData.steps.length > 0 ? (
+                      implementationData.steps.map((step: string, idx: number) => (
+                        <CardContent key={idx} className="space-y-1">
+                          <div className="text-sm break-words whitespace-pre-wrap overflow-x-auto">
+                            <ReactMarkdown>{step}</ReactMarkdown>
+                          </div>
+                        </CardContent>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No steps generated.</p>
+                    )}
+                  </div>
                 </AccordionContent>
               </AccordionItem>
 
               {/* Tests */}
-              <AccordionItem value="impl-tests">
+              <AccordionItem value="gs-tests">
                 <AccordionTrigger>Testing Instructions</AccordionTrigger>
-                <AccordionContent>
-                  {Array.isArray(implementationData.tests) && implementationData.tests.length > 0 ? (
-                    <ol className="list-decimal ml-5 space-y-1">
-                      {implementationData.tests.map((t: string, i: number) => (
-                        <li key={i} className="whitespace-pre-wrap">{t}</li>
-                      ))}
-                    </ol>
+                <AccordionContent className="space-y-2">
+                  <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                    {implementationData.tests && implementationData.tests.length > 0 ? (
+                      implementationData.tests.map((test: string, idx: number) => (
+                        <CardContent key={idx} className="space-y-1">
+                          <div className="text-sm break-words whitespace-pre-wrap overflow-x-auto">
+                            <ReactMarkdown>{test}</ReactMarkdown>
+                          </div>
+                        </CardContent>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No testing steps generated.</p>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+            </Accordion>
+          </CardContent>
+          <CardContent className="space-y-4">
+            <div className="mt-4 space-y-2">
+              <Input
+                placeholder="Paste PR URL to refresh checklist"
+                value={prUrl}
+                onChange={(e) => setPrUrl(e.target.value)}
+              />
+              <Button onClick={() => handleAutomateReview(prUrl)}>Generate Automated Review</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {/* C. Automated PR Review */}
+      {automatedReviewData && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>C. Automated PR Review</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Accordion type="multiple" className="w-full mt-4">
+              {/* 1) Issue Resolution */}
+              <AccordionItem value="review-issue-resolution">
+                <AccordionTrigger>Does the PR resolve the planned scope?</AccordionTrigger>
+                <AccordionContent className="space-y-2">
+                  {automatedReviewData.validate_pr_resolution ? (
+                    <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
+                        {automatedReviewData.validate_pr_resolution}
+                      </ReactMarkdown>
+                    </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No testing steps generated.</p>
+                    <p className="text-sm text-muted-foreground">No feedback available.</p>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* 2) Contribution Guidelines */}
+              <AccordionItem value="review-contribution-guidelines">
+                <AccordionTrigger>Contribution Guidelines Adherence</AccordionTrigger>
+                <AccordionContent className="space-y-2">
+                  {automatedReviewData.review.enforce_contribution_guidelines ? (
+                    <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
+                        {automatedReviewData.enforce_contribution_guidelines}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No feedback available.</p>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* 3) PR Description Clarity */}
+              <AccordionItem value="review-pr-description">
+                <AccordionTrigger>PR Description Quality</AccordionTrigger>
+                <AccordionContent className="space-y-2">
+                  {automatedReviewData.clear_pr_description ? (
+                    <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
+                        {automatedReviewData.clear_pr_description}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No feedback available.</p>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* 4) Testing Recommendations */}
+              <AccordionItem value="review-testing">
+                <AccordionTrigger>Testing Recommendations</AccordionTrigger>
+                <AccordionContent className="space-y-2">
+                  {automatedReviewData.tests_presence ? (
+                    <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
+                      <ReactMarkdown>
+                        {automatedReviewData.tests_presence}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No feedback available.</p>
                   )}
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
-
-            <div className="mt-4 space-y-2">
-              <Input
-                placeholder="Paste PR branch URL to refresh checklist"
-                value={prUrl}
-                onChange={(e) => setPrUrl(e.target.value)}
-              />
-              <Button onClick={handleRefresh}>Automated Review</Button>
-            </div>
           </CardContent>
         </Card>
       )}
