@@ -1,9 +1,8 @@
 import os
+import json
 from dotenv import load_dotenv
-import requests
 import google.generativeai as genai
 import re
-
 
 # Load environment variables
 load_dotenv()
@@ -11,138 +10,236 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-pro-latest')
 
-# use the issue url, to fetch repo information, issue information, and other required information...
-# https://github.com/jax-ml/jax/issues/30787
-# https://api.github.com/repos/jax-ml/jax/issues/30787
-def convert_issue_http_to_api_url(url: str) -> str:
-    suffix = url.removeprefix("https://github.com/")
-    return f"https://api.github.com/repos/{suffix}"
+def classify_issue(title, body):
+    "Classifies if an issue is a bug or a new feature"
+    # Step 1: Classify issue type
+    classify_prompt = f"""
+    You are an expert open-source assistant.
+    Determine whether the given GitHub issue describes a FEATURE REQUEST or a BUG REPORT.
 
-def fetch_issue(issueUrl):
-    issueApiUrl = convert_issue_http_to_api_url(issueUrl)
-    github_token = os.getenv('GITHUB_AUTH_TOKEN')
-    if not github_token:
-        raise ValueError("GITHUB_AUTH_TOKEN not found in .env file")
-    
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {github_token}"
-    }
-    try:
-        response = requests.get(issueApiUrl, headers=headers, timeout=10)
-        response.raise_for_status()
-        # Handle rate limits
-        remaining = int(response.headers.get('X-RateLimit-Remaining', 0))
-        if remaining < 1:
-            # TODO: return an error message saying wait until the reset time
-            reset_time = int(response.headers.get('X-RateLimit-Reset', 0))
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching {issueApiUrl}: {e}")
-        return None
-    
-# Clean the fetched information to get the important parts to it.
+    Input:
+    - Issue Title: {title}
+    - Issue Description: {body}
 
-def clean_issue_info(issue_data):
-    if not issue_data:
-        # TODO: throw an error
-        return None
-    repo_api_url = issue_data["repository_url"]
-    title = issue_data["title"]
-    body = issue_data["body"]
-    # TODO: find out if and how to get description about repo, and related files, etc.
-    github_token = os.getenv('GITHUB_AUTH_TOKEN')
-    if not github_token:
-        raise ValueError("GITHUB_AUTH_TOKEN not found in .env file")
-    
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {github_token}"
-    }
-    try:
-        response = requests.get(repo_api_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        # Handle rate limits
-        remaining = int(response.headers.get('X-RateLimit-Remaining', 0))
-        if remaining < 1:
-            # TODO: return an error message saying wait until the reset time
-            reset_time = int(response.headers.get('X-RateLimit-Reset', 0))
-        repo_data =  response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching {repo_api_url}: {e}")
-        return None
-    if not repo_data:
-        # TODO: throw an error
-        return None
-    repo_description = repo_data["description"]
+    Respond with exactly one word:
+    "feature" or "bug".
+        """
+
+    classification = call_llm(classify_prompt)
+    if not classification:
+        return {"error": "Failed to classify issue type."}
+
+    return classification.strip().lower()
+
+def verify_feature_uniqueness(owner, repo, title, body, issue_type):
+    """
+    Determines if the issue is a feature request or a bug.
+    If feature, provides guidance on checking feature uniqueness.
+    If bug, returns 'not applicable'.
+    """
+    if issue_type == "bug":
+        return {
+            "status": "not applicable",
+            "reason": "This issue is a bug report, not a feature request."
+        }
+
+    uniqueness_prompt = f"""
+    You are an expert open-source contributor assistant.
+    The user is working on a FEATURE REQUEST issue for the repo: {owner}/{repo}.
+
+    Issue Title: {title}
+    Issue Description: {body}
+
+    Task:
+    Provide a SHORT and CLEAR guide (max 3-4 sentences) for how the contributor can verify if this feature already exists in the repository.
+    Avoid generic statements like 'check the repo'; be actionable (e.g., search keywords, check specific files or directories, review docs).
+
+    Output Format:
+    A single paragraph.
+        """
+
+    guidance = call_llm(uniqueness_prompt)
+    if not guidance:
+        guidance = "Could not generate guidance at this time."
+
     return {
-        "title": title,
-        "body": body,
-        "repo_description": repo_description
+        "status": "feature",
+        "guidance": guidance.strip()
     }
 
-# Create a prompt, with the guidelines, "several different prompts"
-def generate_prompt(useful_issue_info):
-    title = useful_issue_info.get("title", "")
-    body = useful_issue_info.get("body", "")
-    repo_description = useful_issue_info.get("repo_description", "")
+
+def check_issue_alignment_with_vision(repo_description, title, body, contribution_guidelines, issue_type):
+    """
+    Check if the issue conflicts with the project's vision using LLM.
+    - If bug, return 'not applicable'.
+    - If feature, analyze contribution guidelines and repo description for conflicts.
+    """
+
+    # Step 1: Skip if bug
+    if issue_type.strip().lower() == "bug":
+        return {
+            "status": "not applicable",
+            "reason": "This issue is a bug report, so alignment check is unnecessary."
+        }
+
+    # Step 2: Build prompt for LLM
+    alignment_prompt = f"""
+    You are an expert open-source reviewer.
+
+    Task:
+    Analyze whether the following feature request aligns with the project's vision and contribution guidelines.
+    If it aligns, simply respond with: "no conflict".
+    If it conflicts, explain the conflict in one short paragraph and suggest up to 2 alternative directions for the contributor.
+
+    Inputs:
+    - Project Description:
+    {repo_description}
+
+    - Contribution Guidelines:
+    {contribution_guidelines}
+
+    - Issue Title: {title}
+    - Issue Description: {body}
+
+    Output Format:
+    If no conflict:
+    "no conflict"
+    If conflict:
+    {{
+    "status": "conflict",
+    "conflict_reason": "...",
+    "suggested_alternatives": ["alt1", "alt2"]
+    }}
+        """
+
+    # Step 3: Call LLM
+    llm_response = call_llm(alignment_prompt)
+    if not llm_response:
+        return {"error": "Failed to check alignment with vision."}
+
+    # Step 4: Parse response
+    if llm_response.strip().lower().startswith("no conflict"):
+        return {"status": "no conflict"}
+    else:
+        # Try to extract JSON-like output from LLM
+        try:
+            # Ensure only JSON-like part is parsed
+            json_match = re.search(r"\{[\s\S]*\}", llm_response)
+            if json_match:
+                return json.loads(json_match.group(0))
+            else:
+                return {"status": "conflict", "details": llm_response.strip()}
+        except Exception:
+            return {"status": "conflict", "details": llm_response.strip()}
+
+def check_issue_scope(repo_description, title, body, contribution_guidelines, issue_type):
+    """
+    Check if the issue scope is manageable for a single PR.
+    If too large, suggest breaking into multiple smaller issues.
+    Only run for feature requests (not bugs).
+    """
+
+    # Step 1: Skip if bug
+    if issue_type.strip().lower() == "bug":
+        return {
+            "status": "not applicable",
+            "reason": "Issue is a bug report, so scope check is unnecessary."
+        }
+
+    # Step 2: Build LLM prompt
+    scope_prompt = f"""
+    You are an expert open-source project assistant.
+
+    Task:
+    Determine whether the following feature request is manageable as a single PR,
+    or if its scope is too large and should be broken into smaller issues.
+    If it is too large, suggest 2-4 smaller chunks that can each become an issue. 
+    Provide actionable chunk titles suitable for new issues (like button labels).
+
+    Inputs:
+    - Project Description: {repo_description}
+    - Contribution Guidelines: {contribution_guidelines}
+    - Issue Title: {title}
+    - Issue Description: {body}
+
+    Output Format (JSON):
+    If scope is manageable:
+    {{"status": "good", "suggested_chunks": []}}
+    If scope is too large:
+    {{"status": "too large", "suggested_chunks": ["chunk1", "chunk2", ...]}}
+        """
+
+    # Step 3: Call LLM
+    llm_response = call_llm(scope_prompt)
+    if not llm_response:
+        return {"error": "Failed to check issue scope."}
+
+    # Step 4: Parse JSON-like output
+    try:
+        import json
+        # Extract JSON part if LLM returns extra text
+        import re
+        json_match = re.search(r"\{[\s\S]*\}", llm_response)
+        if json_match:
+            return json.loads(json_match.group(0))
+        else:
+            # Fallback: if no JSON, return raw text as a suggestion
+            return {"status": "too large", "suggested_chunks": [llm_response.strip()]}
+    except Exception:
+        return {"status": "too large", "suggested_chunks": [llm_response.strip()]}
+
+def understand_relevant_contribution_guidelines(owner, repo, title, body, contribution_guidelines):
+    """
+    Summarize contribution guidelines in three points:
+    1. Whether signing a CLA or agreeing to guidelines is required (with URL if yes, else 'not applicable').
+    2. Instructions to setup project locally.
+    3. How the project expects PR creation to be done.
+    """
 
     prompt = f"""
-                You are an expert open-source contributor assistant. Given the **GitHub Issue Title**, **Issue Description**, and **Repository Description**, your task is to create a detailed **Pull Request Checklist** under predefined sections. This checklist helps a programmer solve the issue from scratch and write a high-quality PR.
+    You are an expert open-source assistant.
 
-                Use the following predefined major headings. Each heading must have sub-steps tailored to the specific issue. Your response should be formatted using these exact headings in bold. Avoid generic advice. Be specific, actionable, and step-by-step wherever possible.
+    Task:
+    Based on the contribution guidelines provided, summarize the key points for a new contributor in the following structured format.
 
-                ---
+    Inputs:
+    - Repository: {owner}/{repo}
+    - Issue Title: {title}
+    - Issue Description: {body}
+    - Contribution Guidelines Text: {contribution_guidelines}
 
-                **Input:**
+    Output Format (JSON):
+    {{
+    "signing_guidelines": "...",  # If contributor must sign a CLA or agree to contribution guidelines, provide the URL. Else, "not applicable".
+    "local_setup_instructions": "...",  # Steps to setup the project locally (install dependencies, build, run tests, etc.)
+    "PR_creation_process": "..."  # Steps or instructions on how the project expects PRs to be created
+    }}
+    Respond with exactly this JSON format, no extra text.
+        """
 
-                - **Issue Title:** {title}
-                - **Issue Description:** {body}
-                - **Repository Description:** {repo_description}
+    llm_response = call_llm(prompt)
+    if not llm_response:
+        return {"error": "Failed to fetch contribution guidelines summary."}
 
-                ---
-
-                **Output Format (strictly use these exact headings and follow order):**
-
-                ---
-
-                **A. Git Skills**  
-                Steps to fork the repo, set up a local branch, sync with upstream, and push changes. Include dealing with merge conflicts if relevant.
-
-                **B. Ensure not superseded or outdated or redundant or low-priority**  
-                Checklist to:
-                1. Search for existing PRs that may already solve this issue.
-                2. Check if the functionality/fix is already in the codebase.
-                3. Determine if the issue is still relevant.
-                4. Estimate the importance of this fix/feature in the project context.
-
-                **C. Understand the basics of the project**  
-                Provide:
-                1. A summary of the project (or a direct quote from repo description).
-                2. A link to or summary of contribution guidelines (use common filenames like `CONTRIBUTING.md` or `.github/CONTRIBUTING.md`).
-
-                **D. Writing code for the PR**  
-                Steps to ensure the code fully solves the issue and avoids unnecessary or unrelated changes.
-
-                **E. PR Conformance to Project Standards**  
-                Checklist with guidance on:
-                1. Project ideology alignment.
-                2. Technical and architectural fit.
-                3. Code style and idioms.
-                4. Commit practices (one commit per subsystem, clean history, meaningful messages).
-                5. PR description clarity and structure.
-                6. Performance or code size implications.
-
-                **F. Testing**  
-                Checklist for:
-                1. Running existing CI tests (mention what frameworks or tools might be used).
-                2. Writing and running manual or automated tests specific to the change.
-
-                ---
-
-                Make the checklist personalized and contextual based on the input issue. Do not omit any major heading. Output only the checklist, no extra text.
-                """
-    return prompt.strip()
+    # Try to parse JSON from LLM response
+    try:
+        import json, re
+        json_match = re.search(r"\{[\s\S]*\}", llm_response)
+        if json_match:
+            return json.loads(json_match.group(0))
+        else:
+            # Fallback if parsing fails: return as plain text in all fields
+            return {
+                "signing_guidelines": "not available",
+                "local_setup_instructions": llm_response.strip(),
+                "PR_creation_process": llm_response.strip()
+            }
+    except Exception:
+        return {
+            "signing_guidelines": "not available",
+            "local_setup_instructions": llm_response.strip(),
+            "PR_creation_process": llm_response.strip()
+        }
 
 # Bulk call several prompts to generate different checklist for each guidebook heading
 def call_llm(prompt):
@@ -151,33 +248,3 @@ def call_llm(prompt):
         return response.text
     else:
         return None
-    
-# return each of them as a dictionary, such that it is easily readable in the frontend
-def clean_llm_result(llm_result):
-    if not llm_result or not isinstance(llm_result, str):
-        return {"error": "No valid LLM response received."}
-
-    headings = [
-        "A. Git Skills",
-        "B. Ensure not superseded or outdated or redundant or low-priority",
-        "C. Understand the basics of the project",
-        "D. Writing code for the PR",
-        "E. PR Conformance to Project Standards",
-        "F. Testing"
-    ]
-
-    # Use regex to split the LLM result at each major heading
-    pattern = r"\*\*(A\. Git Skills|B\. Ensure not superseded or outdated or redundant or low-priority|C\. Understand the basics of the project|D\. Writing code for the PR|E\. PR Conformance to Project Standards|F\. Testing)\*\*"
-    sections = re.split(pattern, llm_result)
-
-    if len(sections) < 2:
-        return {"error": "Unexpected LLM output format."}
-
-    # The format will be like: ['', 'A. Git Skills', content1, 'B. ...', content2, ...]
-    cleaned_result = {}
-    for i in range(1, len(sections), 2):
-        heading = sections[i].strip()
-        content = sections[i + 1].strip() if (i + 1) < len(sections) else ""
-        cleaned_result[heading] = content
-
-    return cleaned_result

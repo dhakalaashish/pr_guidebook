@@ -19,19 +19,42 @@ export default function Home() {
   const [prUrl, setPrUrl] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
+    setLoading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/generate_guidebook`, {
+      const res1 = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/generate_guidebook`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ issueUrl }),
       });
-      const json = await res.json();
-      setData(json);
+      const issueInfo = await res1.json();
+
+      if (!res1.ok) {
+        setError("Failed to fetch issue details.");
+        return;
+      }
+
+      // Step 2: Call getting_started_guide API using issueInfo
+      const res2 = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/getting_started_guide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(issueInfo),
+      });
+      const guidebook = await res2.json();
+
+      if (!res2.ok) {
+        setError("Failed to generate getting started guide.");
+        return;
+      }
+
+      setData(guidebook);
       setError("");
     } catch (err) {
       setError("Failed to fetch checklist.");
+    } finally {
+      setLoading(false)
     }
   };
 
@@ -62,7 +85,9 @@ export default function Home() {
             value={issueUrl}
             onChange={(e) => setIssueUrl(e.target.value)}
           />
-          <Button onClick={handleGenerate}>Generate Guidebook</Button>
+          <Button onClick={handleGenerate}>
+            {loading ? "Generating..." : "Generate Guidebook"}
+          </Button>
         </CardContent>
       </Card>
 

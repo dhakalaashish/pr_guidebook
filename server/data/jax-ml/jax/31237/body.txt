@@ -1,0 +1,1 @@
+It would be extremely useful to be able to access `Tracer`s downstream for isinstance checks. Would this be simple enough and in the scope of `jax.extend`?
