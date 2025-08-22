@@ -1,86 +1,78 @@
 ## 1. Project Goals & Vision
 
-Contribute to JAX by answering questions, improving documentation, contributing to the codebase, or contributing to the broader JAX ecosystem.  The project adheres to Google’s Open Source Community Guidelines.  Contributions are highly valued.  Focus on issues marked with "contributions welcome" or "good first issue."  For other proposals, open a GitHub Issue or Discussion first.
+Contribute to JAX by answering questions, improving documentation, contributing code, or contributing to the broader JAX ecosystem.  The project adheres to Google’s Open Source Community Guidelines.  Contributions are encouraged for issues marked with "contributions welcome" or "good first issue".  For other proposals, open a GitHub Issue or Discussion first.
 
 ## 2. Setup Instructions
 
-1. **Fork and clone the repository:**
-
+1. **Fork and Clone:** Fork the JAX repository and clone it locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/jax
+   git clone https://github.com/<YOUR_USERNAME>/jax
    cd jax
    ```
 
-2. **Install dependencies:**
+2. **Install Python:** Ensure you have Python >= 3.11 installed locally.
 
+3. **Install Dependencies:** Install JAX and its testing requirements:
    ```bash
-   pip install -r build/test-requirements.txt  # Installs testing requirements
-   pip install -e ".[cpu]" # Installs JAX in editable mode
+   pip install -r build/test-requirements.txt
+   pip install -e ".[cpu]" 
    ```
 
-3. **Add upstream remote:**
-
+4. **Add Upstream Remote:**
    ```bash
    git remote add upstream https://www.github.com/jax-ml/jax
    ```
 
-4. **Install pre-commit hooks:**
-
-   ```bash
-   pip install pre-commit
-   pre-commit run --all-files
-   ```
-
-5. **Python Version:**  Python >= 3.11 is required.
-
-
 ## 3. Technical Design Alignment
 
-Discuss proposed contributions (especially those not labeled "contributions welcome" or "good first issue") via a GitHub Issue or Discussion before submitting a PR.
+For non-trivial contributions, open a GitHub Issue or Discussion to get feedback on your proposed changes before implementing them.
 
 ## 4. Code Style & Language Best Practices
 
-Use `mypy` and `ruff` for static code analysis. Run these checks locally via `pre-commit`:
-
-```bash
-pre-commit run --all-files
-```
-
-If your PR modifies documentation notebooks, this command will also run checks on them.
+- Run linters and type checkers before submitting a PR:
+  ```bash
+  pip install pre-commit
+  pre-commit run --all
+  ```
+- Adhere to the project's code style guidelines (implicitly enforced by the linting process).  See "Linting and type-checking" section in the original text.
 
 ## 5. Performance Considerations
 
-No explicit performance guidelines provided in the text.  However, given JAX's focus on composable transformations and JIT compilation to GPU/TPU, performance is likely a key aspect of code contributions. Consider performance implications when making changes and test thoroughly.  The project has a large test suite designed for performance testing, and some tests require a 64-bit environment:
-
-```bash
-JAX_ENABLE_X64=True pytest -n auto tests/
-```
+No specific performance guidelines provided, other than implied need to pass all tests, including those that run in 64-bit mode (see Testing section).
 
 ## 6. Commit Quality Standards
 
-- **Single-change commits:** Each commit should represent a single, self-contained change with a descriptive message.
-- **Squash commits before PR:** Multiple commits should be squashed into a single commit before submitting a PR (except for large refactors or internal rewrites). Use `git rebase -i` for this.
-- **Commit message format:** Follow conventional commit message guidelines (not explicitly specified, but implied).
+- **Single-change commits:** Each commit should represent a single, self-contained change with a descriptive message. Squash multiple commits before submitting a PR if necessary using `git rebase -i`.
+- **Commit messages:** Follow best practices for writing commit messages (implied but not explicitly defined in the text).
 
 ## 7. Pull Request Guidelines
 
-- **Sign the Google Contributor License Agreement (CLA):**  See https://cla.developers.google.com/
-- **Single commit PRs:** PRs should typically contain a single commit (exceptions for large refactors/rewrites).
-- **Branch naming:** Use a descriptive branch name like `name-of-change`.
-- **Push to remote:** `git push --set-upstream origin name-of-change`
-- **Checklist:** Review the JAX pull request checklist before submitting.
-- **"pull ready" label:** After review, a maintainer will mark the PR as "pull ready," triggering additional tests (including GPU and TPU tests).
+- **CLA:** Sign the Google Contributor License Agreement (CLA) before submitting your PR.
+- **Single commit PRs:** PRs should typically contain a single commit (except for large refactors).
+- **Branch naming:** Create a descriptive branch name (e.g., `name-of-change`).
+- **Push your branch:**
+   ```bash
+   git push --set-upstream origin name-of-change
+   ```
+- **PR checklist:**  Review the "JAX pull request checklist" in the original document.  Key points include the CLA requirement and single-commit PRs.
+- **`pull ready` label:** After review, a maintainer will mark your PR as `pull ready` to trigger additional tests. Be prepared to address any failures these tests might uncover.
 
 
 ## 8. Testing (Automated & Manual)
 
-- **Automated testing:**
-    - Run tests locally with `pytest`:  `pytest -n auto tests/`
-    - Test in 64-bit mode by setting `JAX_ENABLE_X64=True` before running `pytest`.
-    - Target specific test files: `pytest -n auto tests/lax_scipy_test.py`
-    - Target specific tests within a file: `pytest -n auto tests/lax_scipy_test.py -k testLogSumExp`
-    - GitHub CI will run a full test suite across various Python versions, dependencies, and configurations.
-    - After review, a restricted test suite (including GPU/TPU tests) runs when the PR is marked "pull ready." Communicate with the assigned maintainer regarding any failures in this suite.
-
-
-- **Manual testing:** Not explicitly mentioned, but testing any user-facing changes manually before submitting a PR is good practice.
+- **Local Testing:** Run tests locally using `pytest`:
+    ```bash
+    pytest -n auto tests/
+    ```
+- **64-bit Testing:** Run tests in 64-bit mode:
+    ```bash
+    JAX_ENABLE_X64=True pytest -n auto tests/
+    ```
+- **Targeted Testing:**  Run specific test files or individual tests:
+    ```bash
+    pytest -n auto tests/lax_scipy_test.py
+    pytest -n auto tests/lax_scipy_test.py -k testLogSumExp 
+    ```
+- **GitHub CI:**  PRs are automatically tested on GitHub CI across various Python versions, dependencies, and configurations.
+- **Restricted Test Suite (Post-Review):** After the PR is marked `pull ready`, a broader suite of tests, including GPU and TPU tests, will run.  Maintainers will communicate any failures from these tests.
+- **Documentation Notebook Testing:** If your PR modifies documentation notebooks, additional checks will be run automatically. See "Update notebooks" (not provided in the given text).
