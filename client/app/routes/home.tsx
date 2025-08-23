@@ -107,27 +107,6 @@ export default function Home() {
     }
   };
 
-  // utils/parseImplementation.ts
-  function parseImplementation(raw: string) {
-    if (!raw) return [];
-
-    // Remove ```json or ``` at start and ``` at end
-    const cleaned = raw
-      .replace(/^```json\s*/, "")
-      .replace(/```$/, "")
-      .trim();
-
-    try {
-      // Parse JSON
-      const parsed = JSON.parse(JSON.stringify(JSON.parse(cleaned)));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      console.error("Failed to parse implementation steps:", e);
-      return [];
-    }
-  }
-
-
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -433,11 +412,19 @@ export default function Home() {
               <AccordionItem value="review-contribution-guidelines">
                 <AccordionTrigger>Contribution Guidelines Adherence</AccordionTrigger>
                 <AccordionContent className="space-y-2">
-                  {automatedReviewData.review.enforce_contribution_guidelines ? (
-                    <div className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3">
-                      <ReactMarkdown>
-                        {automatedReviewData.enforce_contribution_guidelines}
-                      </ReactMarkdown>
+                  {automatedReviewData?.enforce_contribution_guidelines ? (
+                    <div className="space-y-3">
+                      {Object.entries(automatedReviewData.enforce_contribution_guidelines).map(
+                        ([key, value]) => (
+                          <div
+                            key={key}
+                            className="whitespace-pre-wrap text-sm font-mono bg-muted/40 rounded p-3"
+                          >
+                            <h4 className="font-semibold mb-1">{key.replace(/_/g, " ")}</h4>
+                            <ReactMarkdown>{String(value)}</ReactMarkdown>
+                          </div>
+                        )
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">No feedback available.</p>

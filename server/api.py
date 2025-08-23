@@ -52,18 +52,19 @@ def getting_started():
     results["tune_contribution_guidelines"] = tune_contribution_guidelines
     issue_scope = check_issue_scope(repo_description, title, body, contribution_guidelines, issue_type, issue_number)
     results["issue_scope"] = issue_scope
-    print(results)
+    # print(results)
     return jsonify(results)
 
 @app.route('/api/implementation_guide', methods=['POST'])
 def implementation():
     issue_info = request.get_json()
+    print("issue_info", issue_info)
     owner = issue_info['repo_author']
     repo = issue_info['repo_name']
     issue_number = issue_info['issue_number']
     suggestion_level = issue_info.get('suggestion_level', 3)
-    pr_title = issue_info.get('prTitle', '')
-    pr_description = issue_info.get('prDescription', '')
+    pr_title = issue_info.get('pr_title', '')
+    pr_description = issue_info.get('pr_description', '')
 
     # Save PR choice to pr_choice.txt
     pr_choice_path = f"data/{owner}/{repo}/{issue_number}/pr_choice.txt"
@@ -87,7 +88,7 @@ def implementation():
         owner, repo, title, issue_number, body, repo_description, contribution_guidelines,
         pr_title, pr_description, suggestion_level
     )
-    print(results)
+    # print(results)
     return jsonify(results)
 
 @app.route('/api/automate_PR_review', methods=['POST'])

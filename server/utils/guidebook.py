@@ -364,24 +364,24 @@ def explain_tests(owner, repo, title, issue_number, body, repo_description,
     - Use {detail_description}
     - Emphasize testing before creating a PR
 
-    Output STRICTLY as a valid JSON array of steps.
+    ### Output format
+    Return **only valid JSON**, no Markdown, no commentary. 
+    Example:
+    [
+      "Run pytest to execute all tests",
+      "Add unit tests in tests/test_utils.py for parse_data()",
+      "Verify coverage with pytest --cov"
+    ]
     """
 
-    steps_text = call_llm(prompt)
+    steps_text = call_llm(prompt).strip()
 
-    # --- Try parsing JSON safely ---
     try:
-        return json.loads(steps_text)
+        import json
+        parsed = json.loads(steps_text)
+        return [str(s).strip() for s in parsed if str(s).strip()]
     except:
-        # Try to extract JSON block from text
-        match = re.search(r"(\[.*\])", steps_text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except:
-                pass
-        # Fallback: plain list
-        return [line.strip("-• ") for line in steps_text.split("\n") if line.strip()]
+        return [line.strip("-*• ") for line in steps_text.split("\n") if line.strip()]
 
 def validate_pr_resolution(owner, repo, issue_number, repo_description, diff):
     """
