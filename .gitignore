@@ -44,3 +44,6 @@ __pycache__/
 
 # Mac or system files
 .DS_Store
+
+# Temp data
+server/data/

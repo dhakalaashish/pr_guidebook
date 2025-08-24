@@ -1,0 +1,96 @@
+## 1. Project Goals & Vision
+
+Contribute to JAX by answering questions, improving documentation, contributing to the codebase, or contributing to the broader JAX ecosystem.  The project follows Google's Open Source Community Guidelines.
+
+## 2. Setup Instructions
+
+1. **Fork and Clone:** Fork the JAX repository and clone it locally:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/jax
+   cd jax
+   ```
+
+2. **Install Python:** Ensure you have Python >= 3.11 installed locally.
+
+3. **Install Dependencies:** Install project and testing requirements:
+   ```bash
+   pip install -r build/test-requirements.txt
+   pip install -e ".[cpu]"  # Installs JAX in editable mode
+   ```
+
+4. **Add Upstream Remote:**
+   ```bash
+   git remote add upstream https://www.github.com/jax-ml/jax
+   ```
+
+5. **Install pre-commit:**
+    ```bash
+    pip install pre-commit
+    ```
+
+## 3. Technical Design Alignment
+
+For non-trivial contributions or new features, open a GitHub Issue or Discussion to get feedback on your planned contribution before submitting a PR.
+
+## 4. Code Style & Language Best Practices
+
+Run linting and type checking using `pre-commit`:
+
+```bash
+pre-commit run --all-files
+```
+
+## 5. Performance Considerations
+
+No explicit performance considerations mentioned, but implicitly, changes should not introduce performance regressions.  Test changes thoroughly. The restricted test suite includes tests on GPU and TPU, which will highlight any backend-specific performance issues.
+
+## 6. Commit Quality Standards
+
+- **Single-change commits:** Each commit should represent a single, self-contained change with a descriptive message.
+- **Squash commits before PR:** Multiple commits relating to a single change should be squashed into one before submitting a pull request, preferably before review.  Use `git rebase -i` for this.  (Exceptions exist for large refactors/rewrites).
+- **Commit Message Format:** Follow standard commit message best practices (details not provided, infer community norms).
+
+## 7. Pull Request Guidelines
+
+- **CLA:** Sign the Google Contributor License Agreement (CLA) before submitting your PR: https://cla.developers.google.com/
+
+- **Single Commit PRs:** Each PR should ideally contain a single commit (exceptions for large refactors/rewrites).
+
+- **Branch Naming:** Use descriptive branch names like `name-of-change`.
+
+- **PR Checklist:** Review the JAX pull request checklist (items detailed below and in the provided document).
+
+- **`pull ready` label:** Once your PR is reviewed, a maintainer will mark it as `pull ready`, triggering additional tests on various backends. Address any failures communicated to you by the maintainer.
+
+- **Create PR from Fork:** Create a remote branch in your fork and initiate the pull request from there to the JAX repository.
+
+- **Typical PR Workflow:**
+    ```bash
+    git checkout -b name-of-change  # Create your branch
+    # ... make changes ...
+    git add .
+    git commit -m "Your descriptive commit message"
+    git fetch upstream
+    git rebase upstream/main
+    git push --set-upstream origin name-of-change
+    # Create Pull Request on GitHub
+    ```
+
+
+## 8. Testing (Automated & Manual)
+
+- **Automated Tests:** Run tests locally before submitting a PR:
+    ```bash
+    pytest -n auto tests/
+    JAX_ENABLE_X64=True pytest -n auto tests/  # Run in 64-bit mode
+    ```
+    Narrow down test runs by specifying files or using `-k` to match test names:
+    ```bash
+    pytest -n auto tests/lax_scipy_test.py -k testLogSumExp
+    ```
+
+- **Full GitHub Test Suite:** PRs are automatically tested on GitHub CI across different Python versions, dependencies, and configurations.  Address any failures.
+
+- **Restricted Test Suite (Post-Review):** After review and the `pull ready` label, maintainers will run an extended test suite, including GPU and TPU tests. Results are not public, but the assigned maintainer will inform you of any issues.  Be prepared to address platform-specific tolerances.
+
+- **Documentation Tests:** If changing documentation notebooks, ensure these also pass relevant tests. (Details within "Update notebooks" section of the linked documentation, not provided in this excerpt).
